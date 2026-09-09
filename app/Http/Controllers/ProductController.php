@@ -5,131 +5,896 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class ProductController extends Controller
 {
-    // Show admin product list
-    public function index()
-    {
-        // Fetch all products with category (old first, new last)
-        $products = Product::with('category')
-            ->orderBy('id', 'ASC')
-            ->get();
+    /*
+    |--------------------------------------------------------------------------
+    | ADMIN PRODUCT LISTING
+    |--------------------------------------------------------------------------
+    */
 
-        return view('product.index', compact('products'));
+    public function index(Request $request)
+    {
+        $search = $request->input('search');
+
+        $categoryId = $request->input('category_id');
+
+        $priceRange = $request->input('price_range');
+
+        $sort = $request->input('sort', 'latest');
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Product Query
+        |--------------------------------------------------------------------------
+        */
+
+        $query = Product::with('category');
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Search
+        |--------------------------------------------------------------------------
+        */
+
+        if ($search) {
+
+            $query->where(function ($q) use ($search) {
+
+                $q->where(
+                    'name',
+                    'like',
+                    '%' . $search . '%'
+                )
+                ->orWhere(
+                    'details',
+                    'like',
+                    '%' . $search . '%'
+                );
+
+            });
+
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Category Filter
+        |--------------------------------------------------------------------------
+        */
+
+        if ($categoryId) {
+
+            $query->where(
+                'category_id',
+                $categoryId
+            );
+
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Price Filter
+        |--------------------------------------------------------------------------
+        */
+
+        if ($priceRange === 'under_500') {
+
+            $query->where(
+                'price',
+                '<',
+                500
+            );
+
+        } elseif ($priceRange === '500_1000') {
+
+            $query->whereBetween(
+                'price',
+                [500, 1000]
+            );
+
+        } elseif ($priceRange === '1000_2000') {
+
+            $query->whereBetween(
+                'price',
+                [1000, 2000]
+            );
+
+        } elseif ($priceRange === 'above_2000') {
+
+            $query->where(
+                'price',
+                '>',
+                2000
+            );
+
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Sorting
+        |--------------------------------------------------------------------------
+        */
+
+        switch ($sort) {
+
+            case 'price_low':
+
+                $query->orderBy(
+                    'price',
+                    'asc'
+                );
+
+                break;
+
+
+            case 'price_high':
+
+                $query->orderBy(
+                    'price',
+                    'desc'
+                );
+
+                break;
+
+
+            case 'name_asc':
+
+                $query->orderBy(
+                    'name',
+                    'asc'
+                );
+
+                break;
+
+
+            case 'name_desc':
+
+                $query->orderBy(
+                    'name',
+                    'desc'
+                );
+
+                break;
+
+
+            case 'latest':
+
+            default:
+
+                $query->latest();
+
+                break;
+
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Get Products
+        |--------------------------------------------------------------------------
+        */
+
+        $products = $query->get();
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Categories
+        |--------------------------------------------------------------------------
+        */
+
+        $categories = Category::orderBy(
+            'name',
+            'asc'
+        )->get();
+
+
+        return view(
+            'product.index',
+            compact(
+                'products',
+                'categories',
+                'search',
+                'categoryId',
+                'priceRange',
+                'sort'
+            )
+        );
     }
 
-    // Show add product form
+
+    /*
+    |--------------------------------------------------------------------------
+    | CREATE PRODUCT
+    |--------------------------------------------------------------------------
+    */
+
     public function create()
     {
-        // Get all categories for dropdown
         $categories = Category::all();
 
-        return view('product.create', compact('categories'));
+        return view(
+            'product.create',
+            compact('categories')
+        );
     }
 
-    // Store new product
+
+    /*
+    |--------------------------------------------------------------------------
+    | STORE PRODUCT
+    |--------------------------------------------------------------------------
+    */
+
     public function store(Request $request)
     {
-        // Validate product input
         $request->validate([
-            'name'        => 'required',
-            'price'       => 'required',
-            'category_id' => 'required',
-            'image'       => 'image|mimes:jpg,png,jpeg,webp'
+
+            'name' =>
+                'required|string|max:255',
+
+            'price' =>
+                'required|numeric|min:0',
+
+            'category_id' =>
+                'required|exists:categories,id',
+
+            'image' =>
+                'nullable|image|mimes:jpg,jpeg,png,webp',
+
         ]);
 
-        // Default image value
+
+        /*
+        |--------------------------------------------------------------------------
+        | Upload Image
+        |--------------------------------------------------------------------------
+        */
+
         $imageName = null;
 
-        // Upload product image if exists
         if ($request->hasFile('image')) {
-            $imageName = time().'.'.$request->image->extension();
-            $request->image->move(public_path('products'), $imageName);
+
+            $imageName =
+                time()
+                . '_'
+                . Str::random(5)
+                . '.'
+                . $request->image->extension();
+
+            $request->image->move(
+                public_path('products'),
+                $imageName
+            );
         }
 
-        // Save product to database
+
+        /*
+        |--------------------------------------------------------------------------
+        | Create Product
+        |--------------------------------------------------------------------------
+        */
+
         Product::create([
-            'name'        => $request->name,
-            'price'       => $request->price,
-            'details'     => $request->details,
-            'category_id' => $request->category_id,
-            'image'       => $imageName
+
+            'name' =>
+                $request->name,
+
+            'slug' =>
+                Str::slug($request->name),
+
+            'price' =>
+                $request->price,
+
+            'details' =>
+                $request->details,
+
+            'category_id' =>
+                $request->category_id,
+
+            'image' =>
+                $imageName,
+
         ]);
 
-        return redirect()->route('product.index');
+
+        return redirect()
+            ->route('product.index')
+            ->with(
+                'success',
+                'Product created successfully.'
+            );
     }
 
-    // Show edit product form
+
+    /*
+    |--------------------------------------------------------------------------
+    | EDIT PRODUCT
+    |--------------------------------------------------------------------------
+    */
+
     public function edit($id)
     {
-        // Get product by id
-        $product = Product::findOrFail($id);
+        $product =
+            Product::findOrFail($id);
 
-        // Get categories for dropdown
-        $categories = Category::all();
+        $categories =
+            Category::all();
 
-        return view('product.edit', compact('product', 'categories'));
+        return view(
+            'product.edit',
+            compact(
+                'product',
+                'categories'
+            )
+        );
     }
 
-    // Update product details
-    public function update(Request $request, $id)
-    {
-        // Get product by id
-        $product = Product::findOrFail($id);
 
-        // Keep old image by default
-        $imageName = $product->image;
+    /*
+    |--------------------------------------------------------------------------
+    | UPDATE PRODUCT
+    |--------------------------------------------------------------------------
+    */
 
-        // Upload new image if selected
-        if ($request->hasFile('image')) {
-            $imageName = time().'.'.$request->image->extension();
-            $request->image->move(public_path('products'), $imageName);
-        }
+    public function update(
+        Request $request,
+        $id
+    ) {
 
-        // Update product data
-        $product->update([
-            'name'        => $request->name,
-            'price'       => $request->price,
-            'details'     => $request->details,
-            'category_id' => $request->category_id,
-            'image'       => $imageName
+        $product =
+            Product::findOrFail($id);
+
+
+        $request->validate([
+
+            'name' =>
+                'required|string|max:255',
+
+            'price' =>
+                'required|numeric|min:0',
+
+            'category_id' =>
+                'required|exists:categories,id',
+
+            'image' =>
+                'nullable|image|mimes:jpg,jpeg,png,webp',
+
         ]);
 
-        return redirect()->route('product.index');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Existing Image
+        |--------------------------------------------------------------------------
+        */
+
+        $imageName =
+            $product->image;
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | New Image
+        |--------------------------------------------------------------------------
+        */
+
+        if ($request->hasFile('image')) {
+
+            /*
+            | Delete old image
+            */
+
+            if (
+                $product->image &&
+                file_exists(
+                    public_path(
+                        'products/' .
+                        $product->image
+                    )
+                )
+            ) {
+
+                unlink(
+                    public_path(
+                        'products/' .
+                        $product->image
+                    )
+                );
+            }
+
+
+            /*
+            | Upload new image
+            */
+
+            $imageName =
+                time()
+                . '_'
+                . Str::random(5)
+                . '.'
+                . $request->image->extension();
+
+            $request->image->move(
+                public_path('products'),
+                $imageName
+            );
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Update Product
+        |--------------------------------------------------------------------------
+        */
+
+        $product->update([
+
+            'name' =>
+                $request->name,
+
+            'slug' =>
+                Str::slug($request->name),
+
+            'price' =>
+                $request->price,
+
+            'details' =>
+                $request->details,
+
+            'category_id' =>
+                $request->category_id,
+
+            'image' =>
+                $imageName,
+
+        ]);
+
+
+        return redirect()
+            ->route('product.index')
+            ->with(
+                'success',
+                'Product updated successfully.'
+            );
     }
 
-    // Delete product
+
+    /*
+    |--------------------------------------------------------------------------
+    | DELETE PRODUCT
+    |--------------------------------------------------------------------------
+    */
+
     public function delete($id)
     {
-        // Remove product by id
-        Product::findOrFail($id)->delete();
+        $product =
+            Product::findOrFail($id);
 
-        return redirect()->back();
+
+        /*
+        |--------------------------------------------------------------------------
+        | Delete Image
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            $product->image &&
+            file_exists(
+                public_path(
+                    'products/' .
+                    $product->image
+                )
+            )
+        ) {
+
+            unlink(
+                public_path(
+                    'products/' .
+                    $product->image
+                )
+            );
+        }
+
+
+        $product->delete();
+
+
+        return redirect()
+            ->back()
+            ->with(
+                'success',
+                'Product deleted successfully.'
+            );
     }
 
-    // Show frontend product detail page
+
+    /*
+    |--------------------------------------------------------------------------
+    | PRODUCT DETAIL
+    |--------------------------------------------------------------------------
+    */
+
     public function show($id)
     {
-        // Get product with category
-        $product = Product::with('category')->findOrFail($id);
+        /*
+        |--------------------------------------------------------------------------
+        | Current Product
+        |--------------------------------------------------------------------------
+        */
 
-        // Fetch related products from same category (excluding current)
-        $relatedProducts = Product::where('category_id', $product->category_id)
-            ->where('id', '!=', $product->id)
-            ->get();
+        $product =
+            Product::with('category')
+                ->findOrFail($id);
 
-        return view('frontend.product-detail', compact('product', 'relatedProducts'));
+
+        /*
+        |--------------------------------------------------------------------------
+        | FEATURE 1:
+        | Related Products
+        |--------------------------------------------------------------------------
+        |
+        | Automatically show products from
+        | the same category.
+        |
+        */
+
+        $relatedProducts =
+            Product::with('category')
+                ->where(
+                    'category_id',
+                    $product->category_id
+                )
+                ->where(
+                    'id',
+                    '!=',
+                    $product->id
+                )
+                ->latest()
+                ->limit(6)
+                ->get();
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | FEATURE 2:
+        | Recently Viewed Products
+        |--------------------------------------------------------------------------
+        */
+
+        $recentlyViewed =
+            session()->get(
+                'recently_viewed_products',
+                []
+            );
+
+
+        /*
+        | Remove current product
+        */
+
+        $recentlyViewed =
+            array_values(
+                array_diff(
+                    $recentlyViewed,
+                    [$product->id]
+                )
+            );
+
+
+        /*
+        | Add current product at beginning
+        */
+
+        array_unshift(
+            $recentlyViewed,
+            $product->id
+        );
+
+
+        /*
+        | Keep latest 6
+        */
+
+        $recentlyViewed =
+            array_slice(
+                $recentlyViewed,
+                0,
+                6
+            );
+
+
+        session()->put(
+            'recently_viewed_products',
+            $recentlyViewed
+        );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Get Recently Viewed Products
+        |--------------------------------------------------------------------------
+        */
+
+        $recentIds =
+            array_slice(
+                $recentlyViewed,
+                1
+            );
+
+
+        $recentlyViewedProducts =
+            collect();
+
+
+        if (!empty($recentIds)) {
+
+            $recentProducts =
+                Product::with('category')
+                    ->whereIn(
+                        'id',
+                        $recentIds
+                    )
+                    ->get()
+                    ->keyBy('id');
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Preserve Session Order
+            |--------------------------------------------------------------------------
+            */
+
+            foreach ($recentIds as $recentId) {
+
+                if (
+                    $recentProducts
+                        ->has($recentId)
+                ) {
+
+                    $recentlyViewedProducts->push(
+                        $recentProducts->get(
+                            $recentId
+                        )
+                    );
+                }
+            }
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Product Detail View
+        |--------------------------------------------------------------------------
+        */
+
+        return view(
+            'frontend.product-detail',
+            compact(
+                'product',
+                'relatedProducts',
+                'recentlyViewedProducts'
+            )
+        );
     }
 
-    // Show frontend product listing
-    public function frontendProducts()
-    {
-        // Fetch products for frontend (old first, new last)
-        $products = Product::with('category')
-            ->orderBy('id', 'ASC')
-            ->get();
 
-        return view('frontend.products', compact('products'));
+    /*
+    |--------------------------------------------------------------------------
+    | FRONTEND PRODUCTS
+    |--------------------------------------------------------------------------
+    |
+    | Search + Category Filter +
+    | Price Filter + Sorting
+    |
+    */
+
+    public function frontendProducts(
+        Request $request
+    ) {
+
+        $search =
+            $request->input('search');
+
+        $categoryId =
+            $request->input('category_id');
+
+        $priceRange =
+            $request->input('price_range');
+
+        $sort =
+            $request->input(
+                'sort',
+                'latest'
+            );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Product Query
+        |--------------------------------------------------------------------------
+        */
+
+        $query =
+            Product::with('category');
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Search
+        |--------------------------------------------------------------------------
+        */
+
+        if ($search) {
+
+            $query->where(function ($q) use ($search) {
+
+                $q->where(
+                    'name',
+                    'like',
+                    '%' . $search . '%'
+                )
+                ->orWhere(
+                    'details',
+                    'like',
+                    '%' . $search . '%'
+                );
+
+            });
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Category Filter
+        |--------------------------------------------------------------------------
+        */
+
+        if ($categoryId) {
+
+            $query->where(
+                'category_id',
+                $categoryId
+            );
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Price Filter
+        |--------------------------------------------------------------------------
+        */
+
+        if ($priceRange === 'under_500') {
+
+            $query->where(
+                'price',
+                '<',
+                500
+            );
+
+        } elseif ($priceRange === '500_1000') {
+
+            $query->whereBetween(
+                'price',
+                [500, 1000]
+            );
+
+        } elseif ($priceRange === '1000_2000') {
+
+            $query->whereBetween(
+                'price',
+                [1000, 2000]
+            );
+
+        } elseif ($priceRange === 'above_2000') {
+
+            $query->where(
+                'price',
+                '>',
+                2000
+            );
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Sorting
+        |--------------------------------------------------------------------------
+        */
+
+        switch ($sort) {
+
+            case 'price_low':
+
+                $query->orderBy(
+                    'price',
+                    'asc'
+                );
+
+                break;
+
+
+            case 'price_high':
+
+                $query->orderBy(
+                    'price',
+                    'desc'
+                );
+
+                break;
+
+
+            case 'name_asc':
+
+                $query->orderBy(
+                    'name',
+                    'asc'
+                );
+
+                break;
+
+
+            case 'name_desc':
+
+                $query->orderBy(
+                    'name',
+                    'desc'
+                );
+
+                break;
+
+
+            case 'latest':
+
+            default:
+
+                $query->latest();
+
+                break;
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Products
+        |--------------------------------------------------------------------------
+        */
+
+        $products =
+            $query->get();
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Categories
+        |--------------------------------------------------------------------------
+        */
+
+        $categories =
+            Category::orderBy(
+                'name',
+                'asc'
+            )->get();
+
+
+        return view(
+            'frontend.products',
+            compact(
+                'products',
+                'categories',
+                'search',
+                'categoryId',
+                'priceRange',
+                'sort'
+            )
+        );
     }
 }
