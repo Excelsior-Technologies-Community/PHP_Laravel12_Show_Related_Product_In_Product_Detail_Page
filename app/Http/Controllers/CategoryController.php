@@ -8,66 +8,156 @@ use Illuminate\Support\Str;
 
 class CategoryController extends Controller
 {
-    // Show category list
-    public function index()
-    {
-        // Fetch all categories (latest first)
-        $categories = Category::latest()->get();
+    /*
+    |--------------------------------------------------------------------------
+    | CATEGORY LIST
+    |--------------------------------------------------------------------------
+    */
 
-        return view('categories.index', compact('categories'));
+    public function index(Request $request)
+    {
+        $search = $request->input('search');
+
+        $query = Category::withCount('products');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Search Category
+        |--------------------------------------------------------------------------
+        */
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', '%' . $search . '%')
+                  ->orWhere('slug', 'like', '%' . $search . '%');
+            });
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Latest First + Pagination
+        |--------------------------------------------------------------------------
+        */
+
+        $categories = $query
+            ->oldest()
+            ->paginate(5)
+            ->withQueryString();
+
+        return view(
+            'categories.index',
+            compact(
+                'categories',
+                'search'
+            )
+        );
     }
 
-    // Show add category form
+    /*
+    |--------------------------------------------------------------------------
+    | CREATE CATEGORY
+    |--------------------------------------------------------------------------
+    */
+
     public function create()
     {
         return view('categories.create');
     }
 
-    // Store new category
+    /*
+    |--------------------------------------------------------------------------
+    | STORE CATEGORY
+    |--------------------------------------------------------------------------
+    */
+
     public function store(Request $request)
     {
-        // Validate category name
-        $request->validate(['name' => 'required']);
+        $request->validate([
+            'name' => 'required|string|max:255|unique:categories,name',
+        ]);
 
-        // Save category to database
         Category::create([
             'name' => $request->name,
-            'slug' => Str::slug($request->name)
+            'slug' => Str::slug($request->name),
         ]);
 
-        return redirect()->route('categories.index');
+        return redirect()
+            ->route('categories.index')
+            ->with('success', 'Category created successfully.');
     }
 
-    // Show edit category form
+    /*
+    |--------------------------------------------------------------------------
+    | EDIT CATEGORY
+    |--------------------------------------------------------------------------
+    */
+
     public function edit($id)
     {
-        // Get category by id
         $category = Category::findOrFail($id);
 
-        return view('categories.edit', compact('category'));
+        return view(
+            'categories.edit',
+            compact('category')
+        );
     }
 
-    // Update category
+    /*
+    |--------------------------------------------------------------------------
+    | UPDATE CATEGORY
+    |--------------------------------------------------------------------------
+    */
+
     public function update(Request $request, $id)
     {
-        // Get category by id
         $category = Category::findOrFail($id);
 
-        // Update category data
-        $category->update([
-            'name' => $request->name,
-            'slug' => Str::slug($request->name)
+        $request->validate([
+            'name' => 'required|string|max:255|unique:categories,name,' . $category->id,
         ]);
 
-        return redirect()->route('categories.index');
+        $category->update([
+            'name' => $request->name,
+            'slug' => Str::slug($request->name),
+        ]);
+
+        return redirect()
+            ->route('categories.index')
+            ->with('success', 'Category updated successfully.');
     }
 
-    // Delete category
+    /*
+    |--------------------------------------------------------------------------
+    | DELETE CATEGORY
+    |--------------------------------------------------------------------------
+    */
+
     public function delete($id)
     {
-        // Remove category by id
-        Category::findOrFail($id)->delete();
+        $category = Category::findOrFail($id);
 
-        return redirect()->back();
+        /*
+        |--------------------------------------------------------------------------
+        | Prevent deleting category containing products
+        |--------------------------------------------------------------------------
+        */
+
+        if ($category->products()->exists()) {
+            return redirect()
+                ->back()
+                ->with(
+                    'error',
+                    'Category cannot be deleted because products exist in this category.'
+                );
+        }
+
+        $category->delete();
+
+        return redirect()
+            ->back()
+            ->with(
+                'success',
+                'Category deleted successfully.'
+            );
     }
 }
