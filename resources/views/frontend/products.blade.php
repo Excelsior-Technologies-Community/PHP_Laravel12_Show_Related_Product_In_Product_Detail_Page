@@ -5,9 +5,7 @@
 <h2>Our Products</h2>
 
 
-{{-- ========================================================= --}}
-{{-- PRODUCT SEARCH / FILTER / SORT --}}
-{{-- ========================================================= --}}
+{{-- FILTER --}}
 
 <form
     method="GET"
@@ -15,7 +13,6 @@
     class="frontend-product-filter"
 >
 
-    {{-- Search --}}
     <div class="filter-group">
 
         <label>
@@ -32,7 +29,6 @@
     </div>
 
 
-    {{-- Category --}}
     <div class="filter-group">
 
         <label>
@@ -49,7 +45,7 @@
 
                 <option
                     value="{{ $category->id }}"
-                    {{ (string) $categoryId === (string) $category->id ? 'selected' : '' }}
+                    {{ (string)$categoryId === (string)$category->id ? 'selected' : '' }}
                 >
                     {{ $category->name }}
                 </option>
@@ -61,11 +57,10 @@
     </div>
 
 
-    {{-- Price --}}
     <div class="filter-group">
 
         <label>
-            Price
+            Price Range
         </label>
 
         <select name="price_range">
@@ -107,11 +102,48 @@
     </div>
 
 
-    {{-- Sort --}}
+    {{-- NEW MIN PRICE --}}
+
     <div class="filter-group">
 
         <label>
-            Sort By
+            Min Price
+        </label>
+
+        <input
+            type="number"
+            name="min_price"
+            value="{{ $minPrice }}"
+            min="0"
+            placeholder="₹ Minimum"
+        >
+
+    </div>
+
+
+    {{-- NEW MAX PRICE --}}
+
+    <div class="filter-group">
+
+        <label>
+            Max Price
+        </label>
+
+        <input
+            type="number"
+            name="max_price"
+            value="{{ $maxPrice }}"
+            min="0"
+            placeholder="₹ Maximum"
+        >
+
+    </div>
+
+
+    <div class="filter-group">
+
+        <label>
+            Sort
         </label>
 
         <select name="sort">
@@ -124,31 +156,38 @@
             </option>
 
             <option
+                value="oldest"
+                {{ $sort === 'oldest' ? 'selected' : '' }}
+            >
+                Oldest
+            </option>
+
+            <option
                 value="price_low"
                 {{ $sort === 'price_low' ? 'selected' : '' }}
             >
-                Price: Low to High
+                Price Low to High
             </option>
 
             <option
                 value="price_high"
                 {{ $sort === 'price_high' ? 'selected' : '' }}
             >
-                Price: High to Low
+                Price High to Low
             </option>
 
             <option
                 value="name_asc"
                 {{ $sort === 'name_asc' ? 'selected' : '' }}
             >
-                Name: A to Z
+                Name A-Z
             </option>
 
             <option
                 value="name_desc"
                 {{ $sort === 'name_desc' ? 'selected' : '' }}
             >
-                Name: Z to A
+                Name Z-A
             </option>
 
         </select>
@@ -156,7 +195,6 @@
     </div>
 
 
-    {{-- Buttons --}}
     <div class="filter-buttons">
 
         <button
@@ -178,22 +216,18 @@
 </form>
 
 
-{{-- ========================================================= --}}
-{{-- RESULT COUNT --}}
-{{-- ========================================================= --}}
-
 <div class="product-result-info">
 
     Showing
-    <strong>{{ $products->count() }}</strong>
+
+    <strong>
+        {{ $products->total() }}
+    </strong>
+
     product(s)
 
 </div>
 
-
-{{-- ========================================================= --}}
-{{-- FRONTEND PRODUCT GRID --}}
-{{-- ========================================================= --}}
 
 @if($products->count())
 
@@ -203,7 +237,6 @@
 
             <div class="product-card modern">
 
-                {{-- Product Image --}}
                 <div class="image-wrap">
 
                     @if($product->image)
@@ -224,7 +257,6 @@
                 </div>
 
 
-                {{-- Product Information --}}
                 <div class="card-body">
 
                     <h4 class="product-title">
@@ -233,15 +265,13 @@
 
 
                     <p class="category">
-
                         {{ $product->category?->name ?? 'No Category' }}
-
                     </p>
 
 
                     <p class="details">
 
-                        {{ \Illuminate\Support\Str::limit(
+                        {{ Str::limit(
                             $product->details,
                             70
                         ) }}
@@ -249,7 +279,6 @@
                     </p>
 
 
-                    {{-- Price + Details --}}
                     <div class="card-footer">
 
                         <span class="price">
@@ -288,12 +317,19 @@
 
     </div>
 
+
+    {{-- PAGINATION --}}
+
+    <div class="pagination-wrapper">
+
+        {{ $products->links() }}
+
+    </div>
+
 @else
 
     <div class="product-result-info">
-
         No products found matching your filters.
-
     </div>
 
 @endif

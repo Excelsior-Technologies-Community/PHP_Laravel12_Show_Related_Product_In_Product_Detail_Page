@@ -4,76 +4,142 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ProductController;
 
-/*
-|--------------------------------------------------------------------------
-| Category Routes
-|--------------------------------------------------------------------------
-*/
-
-// Show category list
-Route::get('/categories', [CategoryController::class, 'index'])
-    ->name('categories.index');
-
-// Show add category form
-Route::get('/categories/create', [CategoryController::class, 'create'])
-    ->name('categories.create');
-
-// Store category
-Route::post('/categories/store', [CategoryController::class, 'store'])
-    ->name('categories.store');
-
-// Show edit category form
-Route::get('/categories/edit/{id}', [CategoryController::class, 'edit'])
-    ->name('categories.edit');
-
-// Update category
-Route::post('/categories/update/{id}', [CategoryController::class, 'update'])
-    ->name('categories.update');
-
-// Delete category
-Route::get('/categories/delete/{id}', [CategoryController::class, 'delete'])
-    ->name('categories.delete');
 
 /*
 |--------------------------------------------------------------------------
-| Product Routes
+| CATEGORY ROUTES
 |--------------------------------------------------------------------------
 */
 
-// Admin product list
-Route::get('/product', [ProductController::class, 'index'])
-    ->name('product.index');
+Route::get(
+    '/categories',
+    [CategoryController::class, 'index']
+)->name('categories.index');
 
-// Show add product form
-Route::get('/product/create', [ProductController::class, 'create'])
-    ->name('product.create');
+Route::get(
+    '/categories/create',
+    [CategoryController::class, 'create']
+)->name('categories.create');
 
-// Store product
-Route::post('/product/store', [ProductController::class, 'store'])
-    ->name('product.store');
+Route::post(
+    '/categories/store',
+    [CategoryController::class, 'store']
+)->name('categories.store');
 
-// Show edit product form
-Route::get('/product/edit/{id}', [ProductController::class, 'edit'])
-    ->name('product.edit');
+Route::get(
+    '/categories/edit/{id}',
+    [CategoryController::class, 'edit']
+)->name('categories.edit');
 
-// Update product
-Route::post('/product/update/{id}', [ProductController::class, 'update'])
-    ->name('product.update');
+Route::post(
+    '/categories/update/{id}',
+    [CategoryController::class, 'update']
+)->name('categories.update');
 
-// Delete product
-Route::get('/product/delete/{id}', [ProductController::class, 'delete'])
-    ->name('product.delete');
+Route::get(
+    '/categories/delete/{id}',
+    [CategoryController::class, 'delete']
+)->name('categories.delete');
+
 
 /*
 |--------------------------------------------------------------------------
-| Frontend Routes
+| PRODUCT ADMIN ROUTES
 |--------------------------------------------------------------------------
 */
 
-// Frontend product listing
-Route::get('/', [ProductController::class, 'frontendProducts'])
-    ->name('frontend.products');
+Route::get(
+    '/product',
+    [ProductController::class, 'index']
+)->name('product.index');
 
-// Frontend product detail page
-Route::get('/product-detail/{id}', [ProductController::class, 'show'])
-    ->name('frontend.product.detail');
+Route::get(
+    '/product/create',
+    [ProductController::class, 'create']
+)->name('product.create');
+
+Route::post(
+    '/product/store',
+    [ProductController::class, 'store']
+)->name('product.store');
+
+Route::get(
+    '/product/edit/{id}',
+    [ProductController::class, 'edit']
+)->name('product.edit');
+
+Route::post(
+    '/product/update/{id}',
+    [ProductController::class, 'update']
+)->name('product.update');
+
+
+/*
+|--------------------------------------------------------------------------
+| PRODUCT TRASH
+|--------------------------------------------------------------------------
+*/
+
+Route::get(
+    '/product/trash',
+    [ProductController::class, 'trash']
+)->name('product.trash');
+
+Route::get(
+    '/product/restore/{id}',
+    [ProductController::class, 'restore']
+)->name('product.restore');
+
+Route::post(
+    '/product/bulk-delete',
+    [ProductController::class, 'bulkDelete']
+)->name('product.bulkDelete');
+
+Route::get(
+    '/product/export-csv',
+    [ProductController::class, 'exportCsv']
+)->name('product.exportCsv');
+
+Route::get(
+    '/product/delete/{id}',
+    [ProductController::class, 'delete']
+)->name('product.delete');
+
+
+/*
+|--------------------------------------------------------------------------
+| FRONTEND
+|--------------------------------------------------------------------------
+*/
+
+Route::get(
+    '/',
+    [ProductController::class, 'frontendProducts']
+)->name('frontend.products');
+
+Route::get(
+    '/product-detail/{id}',
+    [ProductController::class, 'show']
+)->name('frontend.product.detail');
+
+
+/*
+|--------------------------------------------------------------------------
+| WISHLIST
+|--------------------------------------------------------------------------
+*/
+
+Route::get(
+    '/wishlist',
+    [ProductController::class, 'wishlist']
+)->name('wishlist');
+
+Route::get(
+    '/wishlist/add/{id}',
+    [ProductController::class, 'addToWishlist']
+)->name('wishlist.add');
+
+Route::get(
+    '/wishlist/remove/{id}',
+    [ProductController::class, 'removeFromWishlist']
+)->name('wishlist.remove');
