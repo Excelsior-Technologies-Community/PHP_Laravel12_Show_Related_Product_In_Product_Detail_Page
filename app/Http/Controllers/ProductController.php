@@ -6,12 +6,13 @@ use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProductController extends Controller
 {
     /*
     |--------------------------------------------------------------------------
-    | ADMIN PRODUCT LISTING
+    | ADMIN PRODUCT LIST
     |--------------------------------------------------------------------------
     */
 
@@ -25,6 +26,7 @@ class ProductController extends Controller
 
         $sort = $request->input('sort', 'latest');
 
+        $status = $request->input('status');
 
         /*
         |--------------------------------------------------------------------------
@@ -34,7 +36,6 @@ class ProductController extends Controller
 
         $query = Product::with('category');
 
-
         /*
         |--------------------------------------------------------------------------
         | Search
@@ -42,24 +43,11 @@ class ProductController extends Controller
         */
 
         if ($search) {
-
             $query->where(function ($q) use ($search) {
-
-                $q->where(
-                    'name',
-                    'like',
-                    '%' . $search . '%'
-                )
-                ->orWhere(
-                    'details',
-                    'like',
-                    '%' . $search . '%'
-                );
-
+                $q->where('name', 'like', '%' . $search . '%')
+                  ->orWhere('details', 'like', '%' . $search . '%');
             });
-
         }
-
 
         /*
         |--------------------------------------------------------------------------
@@ -68,14 +56,11 @@ class ProductController extends Controller
         */
 
         if ($categoryId) {
-
             $query->where(
                 'category_id',
                 $categoryId
             );
-
         }
-
 
         /*
         |--------------------------------------------------------------------------
@@ -85,11 +70,7 @@ class ProductController extends Controller
 
         if ($priceRange === 'under_500') {
 
-            $query->where(
-                'price',
-                '<',
-                500
-            );
+            $query->where('price', '<', 500);
 
         } elseif ($priceRange === '500_1000') {
 
@@ -107,14 +88,18 @@ class ProductController extends Controller
 
         } elseif ($priceRange === 'above_2000') {
 
-            $query->where(
-                'price',
-                '>',
-                2000
-            );
-
+            $query->where('price', '>', 2000);
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Status Filter
+        |--------------------------------------------------------------------------
+        */
+
+        if ($status) {
+            $query->where('status', $status);
+        }
 
         /*
         |--------------------------------------------------------------------------
@@ -133,7 +118,6 @@ class ProductController extends Controller
 
                 break;
 
-
             case 'price_high':
 
                 $query->orderBy(
@@ -142,7 +126,6 @@ class ProductController extends Controller
                 );
 
                 break;
-
 
             case 'name_asc':
 
@@ -153,7 +136,6 @@ class ProductController extends Controller
 
                 break;
 
-
             case 'name_desc':
 
                 $query->orderBy(
@@ -163,6 +145,11 @@ class ProductController extends Controller
 
                 break;
 
+            case 'oldest':
+
+                $query->oldest();
+
+                break;
 
             case 'latest':
 
@@ -171,18 +158,17 @@ class ProductController extends Controller
                 $query->latest();
 
                 break;
-
         }
-
 
         /*
         |--------------------------------------------------------------------------
-        | Get Products
+        | PAGINATION - NEW FEATURE
         |--------------------------------------------------------------------------
         */
 
-        $products = $query->get();
-
+        $products = $query
+            ->paginate(5)
+            ->withQueryString();
 
         /*
         |--------------------------------------------------------------------------
@@ -195,7 +181,6 @@ class ProductController extends Controller
             'asc'
         )->get();
 
-
         return view(
             'product.index',
             compact(
@@ -204,11 +189,11 @@ class ProductController extends Controller
                 'search',
                 'categoryId',
                 'priceRange',
-                'sort'
+                'sort',
+                'status'
             )
         );
     }
-
 
     /*
     |--------------------------------------------------------------------------
@@ -225,7 +210,6 @@ class ProductController extends Controller
             compact('categories')
         );
     }
-
 
     /*
     |--------------------------------------------------------------------------
@@ -246,17 +230,13 @@ class ProductController extends Controller
             'category_id' =>
                 'required|exists:categories,id',
 
+            'status' =>
+                'required|in:active,inactive',
+
             'image' =>
-                'nullable|image|mimes:jpg,jpeg,png,webp',
+                'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
 
         ]);
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Upload Image
-        |--------------------------------------------------------------------------
-        */
 
         $imageName = null;
 
@@ -274,13 +254,6 @@ class ProductController extends Controller
                 $imageName
             );
         }
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Create Product
-        |--------------------------------------------------------------------------
-        */
 
         Product::create([
 
@@ -302,8 +275,9 @@ class ProductController extends Controller
             'image' =>
                 $imageName,
 
+            'status' =>
+                $request->status,
         ]);
-
 
         return redirect()
             ->route('product.index')
@@ -312,7 +286,6 @@ class ProductController extends Controller
                 'Product created successfully.'
             );
     }
-
 
     /*
     |--------------------------------------------------------------------------
@@ -337,7 +310,6 @@ class ProductController extends Controller
         );
     }
 
-
     /*
     |--------------------------------------------------------------------------
     | UPDATE PRODUCT
@@ -348,10 +320,8 @@ class ProductController extends Controller
         Request $request,
         $id
     ) {
-
         $product =
             Product::findOrFail($id);
-
 
         $request->validate([
 
@@ -364,33 +334,18 @@ class ProductController extends Controller
             'category_id' =>
                 'required|exists:categories,id',
 
+            'status' =>
+                'required|in:active,inactive',
+
             'image' =>
-                'nullable|image|mimes:jpg,jpeg,png,webp',
+                'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
 
         ]);
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Existing Image
-        |--------------------------------------------------------------------------
-        */
 
         $imageName =
             $product->image;
 
-
-        /*
-        |--------------------------------------------------------------------------
-        | New Image
-        |--------------------------------------------------------------------------
-        */
-
         if ($request->hasFile('image')) {
-
-            /*
-            | Delete old image
-            */
 
             if (
                 $product->image &&
@@ -410,11 +365,6 @@ class ProductController extends Controller
                 );
             }
 
-
-            /*
-            | Upload new image
-            */
-
             $imageName =
                 time()
                 . '_'
@@ -427,13 +377,6 @@ class ProductController extends Controller
                 $imageName
             );
         }
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Update Product
-        |--------------------------------------------------------------------------
-        */
 
         $product->update([
 
@@ -455,8 +398,9 @@ class ProductController extends Controller
             'image' =>
                 $imageName,
 
+            'status' =>
+                $request->status,
         ]);
-
 
         return redirect()
             ->route('product.index')
@@ -466,10 +410,9 @@ class ProductController extends Controller
             );
     }
 
-
     /*
     |--------------------------------------------------------------------------
-    | DELETE PRODUCT
+    | SOFT DELETE PRODUCT
     |--------------------------------------------------------------------------
     */
 
@@ -478,43 +421,149 @@ class ProductController extends Controller
         $product =
             Product::findOrFail($id);
 
-
-        /*
-        |--------------------------------------------------------------------------
-        | Delete Image
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            $product->image &&
-            file_exists(
-                public_path(
-                    'products/' .
-                    $product->image
-                )
-            )
-        ) {
-
-            unlink(
-                public_path(
-                    'products/' .
-                    $product->image
-                )
-            );
-        }
-
-
         $product->delete();
-
 
         return redirect()
             ->back()
             ->with(
                 'success',
-                'Product deleted successfully.'
+                'Product moved to trash.'
             );
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | TRASH
+    |--------------------------------------------------------------------------
+    */
+
+    public function trash()
+    {
+        $products =
+            Product::onlyTrashed()
+                ->with('category')
+                ->latest('deleted_at')
+                ->paginate(5);
+
+        return view(
+            'product.trash',
+            compact('products')
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | RESTORE PRODUCT
+    |--------------------------------------------------------------------------
+    */
+
+    public function restore($id)
+    {
+        $product =
+            Product::onlyTrashed()
+                ->findOrFail($id);
+
+        $product->restore();
+
+        return redirect()
+            ->back()
+            ->with(
+                'success',
+                'Product restored successfully.'
+            );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | BULK DELETE
+    |--------------------------------------------------------------------------
+    */
+
+    public function bulkDelete(Request $request)
+    {
+        $request->validate([
+            'product_ids' => 'required|array',
+            'product_ids.*' => 'exists:products,id',
+        ]);
+
+        Product::whereIn(
+            'id',
+            $request->product_ids
+        )->delete();
+
+        return redirect()
+            ->back()
+            ->with(
+                'success',
+                count($request->product_ids)
+                . ' product(s) moved to trash.'
+            );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CSV EXPORT
+    |--------------------------------------------------------------------------
+    */
+
+    public function exportCsv(): StreamedResponse
+    {
+        $products =
+            Product::with('category')
+                ->latest()
+                ->get();
+
+        $fileName =
+            'products_' .
+            date('Y-m-d_H-i-s') .
+            '.csv';
+
+        return response()->streamDownload(
+            function () use ($products) {
+
+                $handle = fopen(
+                    'php://output',
+                    'w'
+                );
+
+                fputcsv(
+                    $handle,
+                    [
+                        'ID',
+                        'Name',
+                        'Category',
+                        'Price',
+                        'Status',
+                        'Details',
+                        'Created At'
+                    ]
+                );
+
+                foreach ($products as $product) {
+
+                    fputcsv(
+                        $handle,
+                        [
+                            $product->id,
+                            $product->name,
+                            $product->category?->name ?? 'No Category',
+                            $product->price,
+                            $product->status,
+                            $product->details,
+                            $product->created_at,
+                        ]
+                    );
+                }
+
+                fclose($handle);
+            },
+            $fileName,
+            [
+                'Content-Type' =>
+                    'text/csv',
+            ]
+        );
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -524,26 +573,14 @@ class ProductController extends Controller
 
     public function show($id)
     {
-        /*
-        |--------------------------------------------------------------------------
-        | Current Product
-        |--------------------------------------------------------------------------
-        */
-
         $product =
             Product::with('category')
                 ->findOrFail($id);
 
-
         /*
         |--------------------------------------------------------------------------
-        | FEATURE 1:
         | Related Products
         |--------------------------------------------------------------------------
-        |
-        | Automatically show products from
-        | the same category.
-        |
         */
 
         $relatedProducts =
@@ -557,15 +594,17 @@ class ProductController extends Controller
                     '!=',
                     $product->id
                 )
+                ->where(
+                    'status',
+                    'active'
+                )
                 ->latest()
                 ->limit(6)
                 ->get();
 
-
         /*
         |--------------------------------------------------------------------------
-        | FEATURE 2:
-        | Recently Viewed Products
+        | Recently Viewed
         |--------------------------------------------------------------------------
         */
 
@@ -575,11 +614,6 @@ class ProductController extends Controller
                 []
             );
 
-
-        /*
-        | Remove current product
-        */
-
         $recentlyViewed =
             array_values(
                 array_diff(
@@ -588,20 +622,10 @@ class ProductController extends Controller
                 )
             );
 
-
-        /*
-        | Add current product at beginning
-        */
-
         array_unshift(
             $recentlyViewed,
             $product->id
         );
-
-
-        /*
-        | Keep latest 6
-        */
 
         $recentlyViewed =
             array_slice(
@@ -610,18 +634,10 @@ class ProductController extends Controller
                 6
             );
 
-
         session()->put(
             'recently_viewed_products',
             $recentlyViewed
         );
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Get Recently Viewed Products
-        |--------------------------------------------------------------------------
-        */
 
         $recentIds =
             array_slice(
@@ -629,10 +645,8 @@ class ProductController extends Controller
                 1
             );
 
-
         $recentlyViewedProducts =
             collect();
-
 
         if (!empty($recentIds)) {
 
@@ -642,21 +656,19 @@ class ProductController extends Controller
                         'id',
                         $recentIds
                     )
+                    ->where(
+                        'status',
+                        'active'
+                    )
                     ->get()
                     ->keyBy('id');
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | Preserve Session Order
-            |--------------------------------------------------------------------------
-            */
 
             foreach ($recentIds as $recentId) {
 
                 if (
-                    $recentProducts
-                        ->has($recentId)
+                    $recentProducts->has(
+                        $recentId
+                    )
                 ) {
 
                     $recentlyViewedProducts->push(
@@ -668,38 +680,44 @@ class ProductController extends Controller
             }
         }
 
-
         /*
         |--------------------------------------------------------------------------
-        | Product Detail View
+        | Wishlist Status
         |--------------------------------------------------------------------------
         */
+
+        $wishlist =
+            session()->get(
+                'wishlist',
+                []
+            );
+
+        $isWishlisted =
+            in_array(
+                $product->id,
+                $wishlist
+            );
 
         return view(
             'frontend.product-detail',
             compact(
                 'product',
                 'relatedProducts',
-                'recentlyViewedProducts'
+                'recentlyViewedProducts',
+                'isWishlisted'
             )
         );
     }
-
 
     /*
     |--------------------------------------------------------------------------
     | FRONTEND PRODUCTS
     |--------------------------------------------------------------------------
-    |
-    | Search + Category Filter +
-    | Price Filter + Sorting
-    |
     */
 
     public function frontendProducts(
         Request $request
     ) {
-
         $search =
             $request->input('search');
 
@@ -709,22 +727,24 @@ class ProductController extends Controller
         $priceRange =
             $request->input('price_range');
 
+        $minPrice =
+            $request->input('min_price');
+
+        $maxPrice =
+            $request->input('max_price');
+
         $sort =
             $request->input(
                 'sort',
                 'latest'
             );
 
-
-        /*
-        |--------------------------------------------------------------------------
-        | Product Query
-        |--------------------------------------------------------------------------
-        */
-
         $query =
-            Product::with('category');
-
+            Product::with('category')
+                ->where(
+                    'status',
+                    'active'
+                );
 
         /*
         |--------------------------------------------------------------------------
@@ -750,10 +770,9 @@ class ProductController extends Controller
             });
         }
 
-
         /*
         |--------------------------------------------------------------------------
-        | Category Filter
+        | Category
         |--------------------------------------------------------------------------
         */
 
@@ -765,10 +784,9 @@ class ProductController extends Controller
             );
         }
 
-
         /*
         |--------------------------------------------------------------------------
-        | Price Filter
+        | Existing Price Range
         |--------------------------------------------------------------------------
         */
 
@@ -803,6 +821,41 @@ class ProductController extends Controller
             );
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | NEW: Custom Min Price
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            $minPrice !== null &&
+            $minPrice !== ''
+        ) {
+
+            $query->where(
+                'price',
+                '>=',
+                $minPrice
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | NEW: Custom Max Price
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            $maxPrice !== null &&
+            $maxPrice !== ''
+        ) {
+
+            $query->where(
+                'price',
+                '<=',
+                $maxPrice
+            );
+        }
 
         /*
         |--------------------------------------------------------------------------
@@ -821,7 +874,6 @@ class ProductController extends Controller
 
                 break;
 
-
             case 'price_high':
 
                 $query->orderBy(
@@ -830,7 +882,6 @@ class ProductController extends Controller
                 );
 
                 break;
-
 
             case 'name_asc':
 
@@ -841,7 +892,6 @@ class ProductController extends Controller
 
                 break;
 
-
             case 'name_desc':
 
                 $query->orderBy(
@@ -851,8 +901,11 @@ class ProductController extends Controller
 
                 break;
 
+            case 'oldest':
 
-            case 'latest':
+                $query->oldest();
+
+                break;
 
             default:
 
@@ -861,29 +914,22 @@ class ProductController extends Controller
                 break;
         }
 
-
         /*
         |--------------------------------------------------------------------------
-        | Products
+        | Pagination
         |--------------------------------------------------------------------------
         */
 
         $products =
-            $query->get();
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Categories
-        |--------------------------------------------------------------------------
-        */
+            $query
+                ->paginate(8)
+                ->withQueryString();
 
         $categories =
             Category::orderBy(
                 'name',
                 'asc'
             )->get();
-
 
         return view(
             'frontend.products',
@@ -893,8 +939,119 @@ class ProductController extends Controller
                 'search',
                 'categoryId',
                 'priceRange',
+                'minPrice',
+                'maxPrice',
                 'sort'
             )
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | ADD TO WISHLIST
+    |--------------------------------------------------------------------------
+    */
+
+    public function addToWishlist($id)
+    {
+        $product =
+            Product::where(
+                'status',
+                'active'
+            )->findOrFail($id);
+
+        $wishlist =
+            session()->get(
+                'wishlist',
+                []
+            );
+
+        if (!in_array(
+            $product->id,
+            $wishlist
+        )) {
+
+            $wishlist[] =
+                $product->id;
+        }
+
+        session()->put(
+            'wishlist',
+            $wishlist
+        );
+
+        return redirect()
+            ->back()
+            ->with(
+                'success',
+                'Product added to wishlist.'
+            );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | REMOVE FROM WISHLIST
+    |--------------------------------------------------------------------------
+    */
+
+    public function removeFromWishlist($id)
+    {
+        $wishlist =
+            session()->get(
+                'wishlist',
+                []
+            );
+
+        $wishlist =
+            array_values(
+                array_diff(
+                    $wishlist,
+                    [$id]
+                )
+            );
+
+        session()->put(
+            'wishlist',
+            $wishlist
+        );
+
+        return redirect()
+            ->back()
+            ->with(
+                'success',
+                'Product removed from wishlist.'
+            );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | WISHLIST
+    |--------------------------------------------------------------------------
+    */
+
+    public function wishlist()
+    {
+        $ids =
+            session()->get(
+                'wishlist',
+                []
+            );
+
+        $products =
+            Product::with('category')
+                ->whereIn(
+                    'id',
+                    $ids
+                )
+                ->where(
+                    'status',
+                    'active'
+                )
+                ->get();
+
+        return view(
+            'frontend.wishlist',
+            compact('products')
         );
     }
 }
