@@ -19,12 +19,10 @@
             Search
         </label>
 
-        <input
-            type="text"
-            name="search"
-            value="{{ $search }}"
-            placeholder="Search products..."
-        >
+        <div class="search-box">
+            <input type="text" name="search" value="{{ $search }}" placeholder="Search products..." data-live-search="productSuggestions">
+            <div id="productSuggestions" class="search-suggestions"></div>
+        </div>
 
     </div>
 
@@ -190,6 +188,8 @@
                 Name Z-A
             </option>
 
+            <option value="best_selling" {{ $sort === 'best_selling' ? 'selected' : '' }}>Best selling</option>
+
         </select>
 
     </div>
@@ -282,32 +282,34 @@
                     <div class="card-footer">
 
                         <span class="price">
-
-                            ₹{{ number_format(
-                                $product->price,
-                                2
-                            ) }}
-
+                            @if($product->discount_price)<span class="sale-price">₹{{ number_format($product->discount_price, 2) }}</span><span class="old-price">₹{{ number_format($product->price, 2) }}</span>@else ₹{{ number_format($product->price, 2) }} @endif
                         </span>
 
 
-                        <a
-                            href="{{ route(
-                                'frontend.product.detail',
-                                $product->id
-                            ) }}"
-                        >
-
-                            <button
-                                type="button"
-                                class="btn btn-primary btn-sm"
-                            >
-                                View Details
-                            </button>
-
-                        </a>
+                        <div class="product-card-actions">
+                            <a href="{{ route('frontend.product.detail', $product->id) }}" class="btn btn-primary btn-sm">View Details</a>
+                            <form method="POST" action="{{ route('compare.add', $product->id) }}">
+                                @csrf
+                                <button type="submit" class="btn btn-light btn-sm">Compare</button>
+                            </form>
+                            @if(in_array($product->id, $wishlistIds ?? []))
+                                <form method="POST" action="{{ route('wishlist.remove', $product->id) }}">
+                                    @csrf
+                                    <button type="submit" class="btn btn-danger btn-sm">❤️ Saved</button>
+                                </form>
+                            @else
+                                <form method="POST" action="{{ route('wishlist.add', $product->id) }}">
+                                    @csrf
+                                    <button type="submit" class="btn btn-light btn-sm">🤍 Wishlist</button>
+                                </form>
+                            @endif
+                        </div>
 
                     </div>
+
+                    <div class="stock-{{ $product->stock > 0 ? 'ok' : 'out' }}">{{ $product->stock > 0 ? $product->stock . ' in stock' : 'Out of stock' }}</div>
+                    @if($product->featured)<span class="product-category">Featured</span>@endif
+                    @if($product->is_new_arrival)<span class="product-category">New arrival</span>@endif
 
                 </div>
 

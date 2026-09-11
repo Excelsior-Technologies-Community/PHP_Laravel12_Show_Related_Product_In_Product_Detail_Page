@@ -40,6 +40,14 @@
 
         </div>
 
+        @if($product->images->count())
+            <div class="product-gallery">
+                @foreach($product->images as $image)
+                    <img src="{{ asset('products/' . $image->path) }}" alt="{{ $product->name }} gallery image" onclick="document.querySelector('.product-detail-image img').src=this.src">
+                @endforeach
+            </div>
+        @endif
+
 
         <div class="product-detail-content">
 
@@ -59,8 +67,22 @@
 
             {{-- Price --}}
             <div class="product-detail-price">
-                ₹{{ number_format($product->price, 2) }}
+                @if($product->discount_price)
+                    <span class="sale-price">₹{{ number_format($product->discount_price, 2) }}</span>
+                    <span class="old-price">₹{{ number_format($product->price, 2) }}</span>
+                @else
+                    ₹{{ number_format($product->price, 2) }}
+                @endif
             </div>
+
+            @if($product->brand)<p><strong>Brand:</strong> {{ $product->brand }}</p>@endif
+            @if($product->sku)<p><strong>SKU:</strong> {{ $product->sku }}</p>@endif
+            <p class="stock-{{ $product->stock > 0 ? 'ok' : 'out' }}">{{ $product->stock > 0 ? $product->stock . ' items available' : 'Currently out of stock' }}</p>
+
+            @if($product->tag_list)<div class="product-tags">@foreach($product->tag_list as $tag)<span class="product-category">#{{ $tag }}</span>@endforeach</div>@endif
+            @if($product->variants->count())
+                <div class="variant-list"><strong>Available variants</strong>@foreach($product->variants as $variant)<span>{{ $variant->name }}: {{ $variant->value }} ({{ $variant->stock }} available)</span>@endforeach</div>
+            @endif
 
 
             {{-- Status --}}
@@ -105,12 +127,6 @@
 
 
                 {{-- Wishlist --}}
-                @php
-                    $wishlist = session('wishlist', []);
-                    $isWishlisted = in_array($product->id, $wishlist);
-                @endphp
-
-
                 @if($isWishlisted)
 
                     {{-- Remove from Wishlist --}}
@@ -240,7 +256,7 @@
 
 
                             <a
-                                href="{{ route('product.detail', $relatedProduct->id) }}"
+                                href="{{ route('frontend.product.detail', $relatedProduct->id) }}"
                                 class="btn btn-primary"
                             >
                                 View Details
@@ -354,7 +370,7 @@
 
 
                                 <a
-                                    href="{{ route('product.detail', $recentProduct->id) }}"
+                                    href="{{ route('frontend.product.detail', $recentProduct->id) }}"
                                     class="btn btn-primary"
                                 >
                                     View Details
@@ -374,6 +390,20 @@
 
     @endif
 
+    <section class="detail-section">
+        <h2>Ratings & Reviews</h2>
+        @php $approvedReviews = $product->reviews->where('is_approved', true); $averageRating = $approvedReviews->avg('rating'); @endphp
+        <p><strong>{{ $averageRating ? number_format($averageRating, 1) . ' / 5' : 'No ratings yet' }}</strong> ({{ $approvedReviews->count() }} reviews)</p>
+        @foreach($approvedReviews as $review)<div class="review-item"><strong>{{ $review->customer_name }}</strong> <span>{{ str_repeat('★', $review->rating) }}</span><p>{{ $review->review }}</p>@if($review->is_verified_purchase)<small>Verified purchase</small>@endif</div>@endforeach
+        <form method="POST" action="{{ route('product.review.store', $product->id) }}" class="detail-form">@csrf<h3>Write a review</h3><input name="customer_name" placeholder="Your name" required><select name="rating" required><option value="">Rating</option>@for($rating = 5; $rating >= 1; $rating--)<option value="{{ $rating }}">{{ $rating }} stars</option>@endfor</select><textarea name="review" placeholder="Your review" required></textarea><button class="btn btn-primary">Submit review</button></form>
+    </section>
+
+    <section class="detail-section">
+        <h2>Questions & Answers</h2>
+        @foreach($product->questions->where('is_approved', true) as $question)<div class="review-item"><strong>Q: {{ $question->question }}</strong>@if($question->answer)<p>A: {{ $question->answer }}</p>@endif</div>@endforeach
+        <form method="POST" action="{{ route('product.question.store', $product->id) }}" class="detail-form">@csrf<h3>Ask a question</h3><input name="customer_name" placeholder="Your name" required><textarea name="question" placeholder="Your question" required></textarea><button class="btn btn-primary">Submit question</button></form>
+    </section>
+
 </div>
 
 
@@ -383,6 +413,15 @@
 {{-- ============================= --}}
 
 <style>
+
+    .product-gallery { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .product-gallery img { width: 70px; height: 70px; object-fit: cover; border-radius: 7px; cursor: zoom-in; border: 2px solid #e5e7eb; }
+    .product-tags, .variant-list { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+    .variant-list span { background: #f3f4f6; padding: 7px 10px; border-radius: 5px; }
+    .detail-section { margin-top: 35px; padding-top: 25px; border-top: 1px solid #e5e7eb; }
+    .review-item { padding: 14px 0; border-bottom: 1px solid #e5e7eb; }
+    .review-item span { color: #f59e0b; }
+    .detail-form { display: grid; gap: 10px; max-width: 620px; margin-top: 20px; }
 
     .container {
         max-width: 1200px;
