@@ -167,6 +167,15 @@
 
         </div>
 
+            <div class="form-grid">
+                <div class="form-group"><label for="sku">SKU / Product Code</label><input id="sku" name="sku" value="{{ old('sku', $product->sku) }}"></div>
+                <div class="form-group"><label for="brand">Brand</label><input id="brand" name="brand" value="{{ old('brand', $product->brand) }}"></div>
+                <div class="form-group"><label for="discount_price">Sale / Discount Price</label><input type="number" step="0.01" min="0" id="discount_price" name="discount_price" value="{{ old('discount_price', $product->discount_price) }}"></div>
+                <div class="form-group"><label for="stock">Stock</label><input type="number" min="0" id="stock" name="stock" value="{{ old('stock', $product->stock) }}" required></div>
+            </div>
+
+            <div class="form-group"><label for="tags">Tags <small>(comma separated)</small></label><input id="tags" name="tags" value="{{ old('tags', implode(', ', $product->tags ?? [])) }}"></div>
+
 
         {{-- ============================= --}}
         {{-- STATUS --}}
@@ -322,6 +331,12 @@
             </div>
 
         </div>
+
+            <div class="form-group"><label>Additional Product Images</label><input type="file" name="images[]" accept="image/*" multiple></div>
+
+            <div class="form-group"><label>Variants</label><div class="variant-grid"><strong>Type</strong><strong>Value</strong><strong>Stock</strong>@for($index = 0; $index < 4; $index++)@php $variant = $product->variants[$index] ?? null; @endphp<input name="variant_names[]" value="{{ old("variant_names.{$index}", $variant?->name) }}" placeholder="Size / Color"><input name="variant_values[]" value="{{ old("variant_values.{$index}", $variant?->value) }}" placeholder="M / Red"><input type="number" min="0" name="variant_stocks[]" value="{{ old("variant_stocks.{$index}", $variant?->stock ?? 0) }}">@endfor</div></div>
+            <label class="check-row"><input type="checkbox" name="featured" value="1" {{ old('featured', $product->featured) ? 'checked' : '' }}> Featured product</label>
+            <label class="check-row"><input type="checkbox" name="is_new_arrival" value="1" {{ old('is_new_arrival', $product->is_new_arrival) ? 'checked' : '' }}> New arrival</label>
 
 
         {{-- ============================= --}}

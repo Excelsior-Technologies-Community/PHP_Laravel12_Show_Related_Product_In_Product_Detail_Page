@@ -89,6 +89,24 @@
             font-size: 13px;
         }
 
+        .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+        .variant-grid { display: grid; grid-template-columns: 1fr 1fr 120px; gap: 8px; align-items: center; }
+        .check-row { display: inline-flex; gap: 8px; align-items: center; margin: 8px 18px 8px 0; }
+        .check-row input { width: auto; }
+        .search-suggestions { position: absolute; z-index: 5; width: 100%; background: #fff; border: 1px solid #d1d5db; border-radius: 6px; box-shadow: 0 8px 20px rgba(0,0,0,.12); }
+        .search-suggestions a { display: block; padding: 9px 12px; color: #111827; text-decoration: none; }
+        .search-suggestions a:hover { background: #f3f4f6; }
+        .search-box { position: relative; }
+        .sale-price { color: #059669; font-weight: 800; }
+        .old-price { color: #9ca3af; text-decoration: line-through; margin-left: 8px; font-size: .9em; }
+        .stock-ok { color: #166534; font-weight: 600; }
+        .stock-out { color: #991b1b; font-weight: 600; }
+        .toast-message { position: fixed; right: 20px; top: 20px; z-index: 20; min-width: 240px; box-shadow: 0 10px 25px rgba(0,0,0,.18); }
+        .dark-mode { background: #111827; color: #e5e7eb; }
+        .dark-mode .container, .dark-mode .product-card.modern, .dark-mode .product-detail-card { background: #1f2937; color: #e5e7eb; }
+        .dark-mode input, .dark-mode select, .dark-mode textarea, .dark-mode .search-suggestions { background: #374151; color: #fff; border-color: #6b7280; }
+        .dark-mode h1, .dark-mode h2, .dark-mode h3, .dark-mode h4 { color: #fff; }
+
         /* ================= TABLE (ADMIN) ================= */
 
         table {
@@ -328,8 +346,36 @@
 
         .card-footer {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 12px;
+        }
+
+        .product-card-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            width: 100%;
+        }
+
+        .product-card-actions > a,
+        .product-card-actions > form {
+            display: flex;
+            min-width: 0;
+        }
+
+        .product-card-actions > a:first-child {
+            grid-column: 1 / -1;
+        }
+
+        .product-card-actions .btn {
+            width: 100%;
+            min-height: 38px;
+            white-space: nowrap;
+        }
+
+        .product-card-actions form {
+            margin: 0 !important;
         }
 
         .price {
@@ -791,6 +837,8 @@
             ❤️ Wishlist
         </a>
 
+        <a href="{{ route('compare') }}">Compare</a>
+
         <a href="{{ route('categories.index') }}">
             Categories
         </a>
@@ -802,6 +850,8 @@
         <a href="{{ route('product.trash') }}">
             🗑 Trash
         </a>
+
+        <button type="button" class="btn btn-light" id="darkModeToggle">Dark mode</button>
 
     </div>
 
@@ -827,6 +877,31 @@
                 reader.readAsDataURL(input.files[0]);
             }
         }
+
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        darkModeToggle?.addEventListener('click', function () {
+            document.body.classList.toggle('dark-mode');
+            localStorage.setItem('shop-dark-mode', document.body.classList.contains('dark-mode') ? '1' : '0');
+        });
+        if (localStorage.getItem('shop-dark-mode') === '1') document.body.classList.add('dark-mode');
+
+        document.querySelectorAll('.alert.success').forEach(function (alert) {
+            alert.classList.add('toast-message');
+            setTimeout(() => alert.remove(), 3500);
+        });
+
+        document.querySelectorAll('[data-live-search]').forEach(function (input) {
+            const target = document.getElementById(input.dataset.liveSearch);
+            let timer;
+            input.addEventListener('input', function () {
+                clearTimeout(timer);
+                const term = input.value.trim();
+                if (!term) { target.innerHTML = ''; return; }
+                timer = setTimeout(() => fetch(`{{ route('frontend.products.search') }}?q=${encodeURIComponent(term)}`)
+                    .then(response => response.json())
+                    .then(items => target.innerHTML = items.map(item => `<a href="{{ url('/product-detail') }}/${item.id}">${item.name} <small>₹${item.discount_price || item.price}</small></a>`).join('')), 250);
+            });
+        });
     </script>
 
 

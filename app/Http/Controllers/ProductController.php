@@ -4,6 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Product;
 use App\Models\Category;
+use App\Models\ProductImage;
+use App\Models\ProductQuestion;
+use App\Models\ProductReview;
+use App\Models\ProductVariant;
+use App\Models\Wishlist;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -45,7 +50,9 @@ class ProductController extends Controller
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', '%' . $search . '%')
-                  ->orWhere('details', 'like', '%' . $search . '%');
+                                    ->orWhere('details', 'like', '%' . $search . '%')
+                                    ->orWhere('sku', 'like', '%' . $search . '%')
+                                    ->orWhere('brand', 'like', '%' . $search . '%');
             });
         }
 
@@ -145,6 +152,10 @@ class ProductController extends Controller
 
                 break;
 
+            case 'best_selling':
+                $query->orderByDesc('sales_count');
+                break;
+
             case 'oldest':
 
                 $query->oldest();
@@ -236,6 +247,21 @@ class ProductController extends Controller
             'image' =>
                 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
 
+            'images.*' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'sku' => 'nullable|string|max:100|unique:products,sku',
+            'brand' => 'nullable|string|max:100',
+            'discount_price' => 'nullable|numeric|min:0|lt:price',
+            'stock' => 'required|integer|min:0',
+            'tags' => 'nullable|string|max:1000',
+            'featured' => 'nullable|boolean',
+            'is_new_arrival' => 'nullable|boolean',
+            'variant_names' => 'nullable|array',
+            'variant_names.*' => 'nullable|string|max:100',
+            'variant_values' => 'nullable|array',
+            'variant_values.*' => 'nullable|string|max:100',
+            'variant_stocks' => 'nullable|array',
+            'variant_stocks.*' => 'nullable|integer|min:0',
+
         ]);
 
         $imageName = null;
@@ -255,7 +281,7 @@ class ProductController extends Controller
             );
         }
 
-        Product::create([
+        $product = Product::create([
 
             'name' =>
                 $request->name,
@@ -265,6 +291,11 @@ class ProductController extends Controller
 
             'price' =>
                 $request->price,
+
+            'sku' => $request->sku ?: null,
+            'brand' => $request->brand,
+            'discount_price' => $request->discount_price ?: null,
+            'stock' => $request->stock,
 
             'details' =>
                 $request->details,
@@ -277,7 +308,13 @@ class ProductController extends Controller
 
             'status' =>
                 $request->status,
+
+            'tags' => $this->parseTags($request->tags),
+            'featured' => $request->boolean('featured'),
+            'is_new_arrival' => $request->boolean('is_new_arrival'),
         ]);
+
+        $this->saveAdditionalProductData($product, $request);
 
         return redirect()
             ->route('product.index')
@@ -296,7 +333,7 @@ class ProductController extends Controller
     public function edit($id)
     {
         $product =
-            Product::findOrFail($id);
+            Product::with(['images', 'variants'])->findOrFail($id);
 
         $categories =
             Category::all();
@@ -339,6 +376,21 @@ class ProductController extends Controller
 
             'image' =>
                 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+
+            'images.*' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'sku' => 'nullable|string|max:100|unique:products,sku,' . $product->id,
+            'brand' => 'nullable|string|max:100',
+            'discount_price' => 'nullable|numeric|min:0|lt:price',
+            'stock' => 'required|integer|min:0',
+            'tags' => 'nullable|string|max:1000',
+            'featured' => 'nullable|boolean',
+            'is_new_arrival' => 'nullable|boolean',
+            'variant_names' => 'nullable|array',
+            'variant_names.*' => 'nullable|string|max:100',
+            'variant_values' => 'nullable|array',
+            'variant_values.*' => 'nullable|string|max:100',
+            'variant_stocks' => 'nullable|array',
+            'variant_stocks.*' => 'nullable|integer|min:0',
 
         ]);
 
@@ -389,6 +441,11 @@ class ProductController extends Controller
             'price' =>
                 $request->price,
 
+            'sku' => $request->sku ?: null,
+            'brand' => $request->brand,
+            'discount_price' => $request->discount_price ?: null,
+            'stock' => $request->stock,
+
             'details' =>
                 $request->details,
 
@@ -400,7 +457,13 @@ class ProductController extends Controller
 
             'status' =>
                 $request->status,
+
+            'tags' => $this->parseTags($request->tags),
+            'featured' => $request->boolean('featured'),
+            'is_new_arrival' => $request->boolean('is_new_arrival'),
         ]);
+
+        $this->saveAdditionalProductData($product, $request, true);
 
         return redirect()
             ->route('product.index')
@@ -574,7 +637,7 @@ class ProductController extends Controller
     public function show($id)
     {
         $product =
-            Product::with('category')
+            Product::with(['category', 'images', 'variants', 'reviews', 'questions'])
                 ->findOrFail($id);
 
         /*
@@ -585,10 +648,13 @@ class ProductController extends Controller
 
         $relatedProducts =
             Product::with('category')
-                ->where(
-                    'category_id',
-                    $product->category_id
-                )
+                ->where(function ($query) use ($product) {
+                    $query->where('category_id', $product->category_id)
+                        ->orWhere('brand', $product->brand);
+                    foreach ($product->tag_list as $tag) {
+                        $query->orWhereJsonContains('tags', $tag);
+                    }
+                })
                 ->where(
                     'id',
                     '!=',
@@ -686,17 +752,9 @@ class ProductController extends Controller
         |--------------------------------------------------------------------------
         */
 
-        $wishlist =
-            session()->get(
-                'wishlist',
-                []
-            );
-
-        $isWishlisted =
-            in_array(
-                $product->id,
-                $wishlist
-            );
+        $isWishlisted = Wishlist::where('product_id', $product->id)
+            ->where('session_id', session()->getId())
+            ->exists();
 
         return view(
             'frontend.product-detail',
@@ -707,6 +765,86 @@ class ProductController extends Controller
                 'isWishlisted'
             )
         );
+    }
+
+    public function ajaxSearch(Request $request)
+    {
+        $term = trim((string) $request->input('q'));
+
+        if ($term === '') {
+            return response()->json([]);
+        }
+
+        return response()->json(
+            Product::where('status', 'active')
+                ->where(function ($query) use ($term) {
+                    $query->where('name', 'like', "%{$term}%")
+                        ->orWhere('sku', 'like', "%{$term}%")
+                        ->orWhere('brand', 'like', "%{$term}%");
+                })
+                ->limit(8)
+                ->get(['id', 'name', 'price', 'discount_price'])
+        );
+    }
+
+    public function storeReview(Request $request, $id)
+    {
+        $product = Product::where('status', 'active')->findOrFail($id);
+        $data = $request->validate([
+            'customer_name' => 'required|string|max:100',
+            'rating' => 'required|integer|min:1|max:5',
+            'review' => 'required|string|max:2000',
+        ]);
+        $data['product_id'] = $product->id;
+        $data['is_approved'] = false;
+        $data['is_verified_purchase'] = false;
+        ProductReview::create($data);
+
+        return back()->with('success', 'Review submitted for approval.');
+    }
+
+    public function storeQuestion(Request $request, $id)
+    {
+        $product = Product::where('status', 'active')->findOrFail($id);
+        $data = $request->validate([
+            'customer_name' => 'required|string|max:100',
+            'question' => 'required|string|max:2000',
+        ]);
+        $data['product_id'] = $product->id;
+        $data['is_approved'] = false;
+        ProductQuestion::create($data);
+
+        return back()->with('success', 'Question submitted for approval.');
+    }
+
+    public function reviewModeration()
+    {
+        $reviews = ProductReview::with('product')->latest()->paginate(20);
+        $questions = ProductQuestion::with('product')->latest()->paginate(20, ['*'], 'questions');
+
+        return view('product.reviews', compact('reviews', 'questions'));
+    }
+
+    public function approveReview($id)
+    {
+        ProductReview::findOrFail($id)->update(['is_approved' => true]);
+
+        return back()->with('success', 'Review approved.');
+    }
+
+    public function approveQuestion($id)
+    {
+        ProductQuestion::findOrFail($id)->update(['is_approved' => true]);
+
+        return back()->with('success', 'Question approved.');
+    }
+
+    public function answerQuestion(Request $request, $id)
+    {
+        $data = $request->validate(['answer' => 'required|string|max:2000']);
+        ProductQuestion::findOrFail($id)->update($data + ['is_approved' => true]);
+
+        return back()->with('success', 'Question answered.');
     }
 
     /*
@@ -901,6 +1039,10 @@ class ProductController extends Controller
 
                 break;
 
+            case 'best_selling':
+                $query->orderByDesc('sales_count');
+                break;
+
             case 'oldest':
 
                 $query->oldest();
@@ -931,6 +1073,10 @@ class ProductController extends Controller
                 'asc'
             )->get();
 
+        $wishlistIds = Wishlist::where('session_id', session()->getId())
+            ->pluck('product_id')
+            ->all();
+
         return view(
             'frontend.products',
             compact(
@@ -941,7 +1087,8 @@ class ProductController extends Controller
                 'priceRange',
                 'minPrice',
                 'maxPrice',
-                'sort'
+                'sort',
+                'wishlistIds'
             )
         );
     }
@@ -960,25 +1107,10 @@ class ProductController extends Controller
                 'active'
             )->findOrFail($id);
 
-        $wishlist =
-            session()->get(
-                'wishlist',
-                []
-            );
-
-        if (!in_array(
-            $product->id,
-            $wishlist
-        )) {
-
-            $wishlist[] =
-                $product->id;
-        }
-
-        session()->put(
-            'wishlist',
-            $wishlist
-        );
+        Wishlist::firstOrCreate([
+            'product_id' => $product->id,
+            'session_id' => session()->getId(),
+        ]);
 
         return redirect()
             ->back()
@@ -996,24 +1128,9 @@ class ProductController extends Controller
 
     public function removeFromWishlist($id)
     {
-        $wishlist =
-            session()->get(
-                'wishlist',
-                []
-            );
-
-        $wishlist =
-            array_values(
-                array_diff(
-                    $wishlist,
-                    [$id]
-                )
-            );
-
-        session()->put(
-            'wishlist',
-            $wishlist
-        );
+        Wishlist::where('product_id', $id)
+            ->where('session_id', session()->getId())
+            ->delete();
 
         return redirect()
             ->back()
@@ -1031,18 +1148,10 @@ class ProductController extends Controller
 
     public function wishlist()
     {
-        $ids =
-            session()->get(
-                'wishlist',
-                []
-            );
-
-        $products =
-            Product::with('category')
-                ->whereIn(
-                    'id',
-                    $ids
-                )
+        $products = Product::with('category')
+            ->whereHas('wishlistItems', function ($query) {
+                $query->where('session_id', session()->getId());
+            })
                 ->where(
                     'status',
                     'active'
@@ -1053,5 +1162,65 @@ class ProductController extends Controller
             'frontend.wishlist',
             compact('products')
         );
+    }
+
+    public function addToCompare($id)
+    {
+        Product::where('status', 'active')->findOrFail($id);
+        $compare = session()->get('compare', []);
+        if (!in_array((int) $id, $compare) && count($compare) < 4) {
+            $compare[] = (int) $id;
+        }
+        session()->put('compare', $compare);
+
+        return back()->with('success', 'Product added to compare.');
+    }
+
+    public function removeFromCompare($id)
+    {
+        session()->put('compare', array_values(array_diff(session()->get('compare', []), [(int) $id])));
+
+        return back()->with('success', 'Product removed from compare.');
+    }
+
+    public function compare()
+    {
+        $products = Product::with('category')->whereIn('id', session()->get('compare', []))->get();
+
+        return view('frontend.compare', compact('products'));
+    }
+
+    private function parseTags(?string $tags): array
+    {
+        return array_values(array_filter(array_map('trim', explode(',', (string) $tags))));
+    }
+
+    private function saveAdditionalProductData(Product $product, Request $request, bool $replaceVariants = false): void
+    {
+        if ($replaceVariants) {
+            $product->variants()->delete();
+        }
+
+        foreach ($request->input('variant_names', []) as $index => $name) {
+            $value = $request->input("variant_values.{$index}");
+            if (trim((string) $name) !== '' && trim((string) $value) !== '') {
+                ProductVariant::create([
+                    'product_id' => $product->id,
+                    'name' => trim($name),
+                    'value' => trim($value),
+                    'stock' => (int) $request->input("variant_stocks.{$index}", 0),
+                ]);
+            }
+        }
+
+        foreach ($request->file('images', []) as $index => $image) {
+            $path = time() . '_' . Str::random(8) . '.' . $image->extension();
+            $image->move(public_path('products'), $path);
+            ProductImage::create([
+                'product_id' => $product->id,
+                'path' => $path,
+                'sort_order' => $index,
+            ]);
+        }
     }
 }

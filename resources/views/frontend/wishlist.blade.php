@@ -75,39 +75,17 @@
 
 
                     <div class="card-footer">
-
-                        <a
-                            href="{{ route(
-                                'frontend.product.detail',
-                                $product->id
-                            ) }}"
-                        >
-
-                            <button
-                                type="button"
-                                class="btn btn-primary btn-sm"
-                            >
-                                View
-                            </button>
-
-                        </a>
-
-
-                        <a
-                            href="{{ route(
-                                'wishlist.remove',
-                                $product->id
-                            ) }}"
-                        >
-
-                            <button
-                                type="button"
-                                class="btn btn-danger btn-sm"
-                            >
-                                Remove
-                            </button>
-
-                        </a>
+                        <div class="product-card-actions">
+                            <a href="{{ route('frontend.product.detail', $product->id) }}" class="btn btn-primary btn-sm">View Product</a>
+                            <form method="POST" action="{{ route('compare.add', $product->id) }}">
+                                @csrf
+                                <button type="submit" class="btn btn-light btn-sm">Compare</button>
+                            </form>
+                            <form method="POST" action="{{ route('wishlist.remove', $product->id) }}">
+                                @csrf
+                                <button type="submit" class="btn btn-danger btn-sm">Remove</button>
+                            </form>
+                        </div>
 
                     </div>
 

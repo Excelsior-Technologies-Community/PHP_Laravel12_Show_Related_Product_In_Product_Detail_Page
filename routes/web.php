@@ -100,6 +100,11 @@ Route::get(
     [ProductController::class, 'exportCsv']
 )->name('product.exportCsv');
 
+Route::get('/product/reviews', [ProductController::class, 'reviewModeration'])->name('product.reviews');
+Route::post('/product/reviews/{id}/approve', [ProductController::class, 'approveReview'])->name('product.reviews.approve');
+Route::post('/product/questions/{id}/approve', [ProductController::class, 'approveQuestion'])->name('product.questions.approve');
+Route::post('/product/questions/{id}/answer', [ProductController::class, 'answerQuestion'])->name('product.questions.answer');
+
 Route::get(
     '/product/delete/{id}',
     [ProductController::class, 'delete']
@@ -122,6 +127,21 @@ Route::get(
     [ProductController::class, 'show']
 )->name('frontend.product.detail');
 
+Route::get(
+    '/products/search-suggestions',
+    [ProductController::class, 'ajaxSearch']
+)->name('frontend.products.search');
+
+Route::post(
+    '/product-detail/{id}/review',
+    [ProductController::class, 'storeReview']
+)->name('product.review.store');
+
+Route::post(
+    '/product-detail/{id}/question',
+    [ProductController::class, 'storeQuestion']
+)->name('product.question.store');
+
 
 /*
 |--------------------------------------------------------------------------
@@ -134,12 +154,16 @@ Route::get(
     [ProductController::class, 'wishlist']
 )->name('wishlist');
 
-Route::get(
+Route::get('/compare', [ProductController::class, 'compare'])->name('compare');
+Route::post('/compare/add/{id}', [ProductController::class, 'addToCompare'])->name('compare.add');
+Route::post('/compare/remove/{id}', [ProductController::class, 'removeFromCompare'])->name('compare.remove');
+
+Route::post(
     '/wishlist/add/{id}',
     [ProductController::class, 'addToWishlist']
 )->name('wishlist.add');
 
-Route::get(
+Route::post(
     '/wishlist/remove/{id}',
     [ProductController::class, 'removeFromWishlist']
 )->name('wishlist.remove');
